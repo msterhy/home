@@ -15,6 +15,10 @@ export const useTransactionsStore = defineStore('transactions', {
   actions: {
     persist() { storage.save(this.items) },
     upsert(txn) {
+      // 兼容新增字段的默认值
+      txn.tags = Array.isArray(txn.tags) ? txn.tags : []
+      txn.region = txn.region || ''
+      txn.counterparty = txn.counterparty || ''
       if (!txn.id) {
         txn.id = uuidv4()
         this.items.unshift({ ...txn })
@@ -34,5 +38,6 @@ export const useTransactionsStore = defineStore('transactions', {
     }
   }
 })
+
 
 

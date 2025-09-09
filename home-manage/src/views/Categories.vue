@@ -16,6 +16,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useCategoriesStore } from '@/stores/categories'
+import CategoryNode from '@/components/common/CategoryNode.vue'
 
 const input = ref('')
 const store = useCategoriesStore()
@@ -25,33 +26,9 @@ function add() { store.add(input.value); input.value = '' }
 function remove(path) { store.remove(path) }
 </script>
 
-<script>
-export default {
-  components: {
-    CategoryNode: {
-      props: ['node'],
-      emits: ['remove'],
-      template: `
-        <div class="node">
-          <span>{{ node.name }}</span>
-          <button @click="$emit('remove', node.path)">删除</button>
-          <ul v-if="node.children && node.children.length">
-            <li v-for="(c, i) in node.children" :key="i">
-              <CategoryNode :node="c" @remove="$emit('remove', $event)" />
-            </li>
-          </ul>
-        </div>
-      `,
-    }
-  }
-}
-</script>
-
 <style scoped>
 .page { padding: 16px; }
 .toolbar { display: flex; gap: 8px; margin: 12px 0; }
-.node { margin: 4px 0; }
-.node > span { margin-right: 8px; }
 </style>
 
 

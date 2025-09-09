@@ -16,7 +16,7 @@
     <table class="table">
       <thead>
         <tr>
-          <th>日期</th><th>类型</th><th>分类</th><th>成员</th><th>金额</th><th>商家</th><th>备注</th><th>操作</th>
+          <th>日期</th><th>类型</th><th>分类</th><th>成员</th><th>金额</th><th>商家</th><th>区域</th><th>往来对象</th><th>标签</th><th>备注</th><th>操作</th>
         </tr>
       </thead>
       <tbody>
@@ -27,6 +27,9 @@
           <td>{{ t.memberName }}</td>
           <td>{{ t.amount }}</td>
           <td>{{ t.merchant || '-' }}</td>
+          <td>{{ t.region || '-' }}</td>
+          <td>{{ t.counterparty || '-' }}</td>
+          <td>{{ (t.tags||[]).join(', ') || '-' }}</td>
           <td>{{ t.note || '-' }}</td>
           <td>
             <button @click="openEditor(t)">编辑</button>
@@ -51,10 +54,14 @@
           <label>成员 <MemberSelect v-model="current.memberName" /></label>
           <label>金额 <MoneyInput v-model="current.amount" /></label>
           <label>商家 <input v-model="current.merchant" /></label>
+          <label>区域 <input v-model="current.region" placeholder="如：XX区/商圈" /></label>
+          <label>往来对象 <input v-model="current.counterparty" placeholder="如：朋友A/公司B" /></label>
+          <label>标签 <TagsInput v-model="current.tags" /></label>
           <label>备注 <input v-model="current.note" /></label>
         </div>
         <div class="actions">
           <button @click="save">保存</button>
+          <button @click="exportCSV">导出CSV</button>
           <button @click="cancel">取消</button>
         </div>
       </div>
@@ -70,20 +77,35 @@ import CategorySelect from '@/components/common/CategorySelect.vue'
 import MemberSelect from '@/components/common/MemberSelect.vue'
 import MoneyInput from '@/components/common/MoneyInput.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
+import TagsInput from '@/components/common/TagsInput.vue'
 
 const editing = ref(false)
 const store = useTransactionsStore()
 const { items: list } = storeToRefs(store)
 const filter = ref({ type: '', keyword: '', memberName: '', categoryPath: [], range: { start: '', end: '' } })
-const current = ref({ id: '', date: '', type: 'expense', categoryPath: [], memberName: '', amount: 0, merchant: '', note: '' })
+const current = ref({ id: '', date: '', type: 'expense', categoryPath: [], memberName: '', amount: 0, merchant: '', region: '', counterparty: '', tags: [], note: '' })
 const categoryInput = ref('')
 
 const filtered = computed(() => {
   return list.value.filter(t => {
+    // 类型
     if (filter.value.type && t.type !== filter.value.type) return false
+    // 成员
+    if (filter.value.memberName && t.memberName !== filter.value.memberName) return false
+    // 分类前缀匹配
+    if (Array.isArray(filter.value.categoryPath) && filter.value.categoryPath.length) {
+      const sel = filter.value.categoryPath.join('/')
+      const cur = (t.categoryPath||[]).join('/')
+      if (!cur.startsWith(sel)) return false
+    }
+    // 日期范围
+    const { start, end } = filter.value.range || {}
+    if (start && (!t.date || t.date < start)) return false
+    if (end && (!t.date || t.date > end)) return false
+    // 关键词
     const kw = filter.value.keyword?.trim().toLowerCase()
     if (!kw) return true
-    const text = [t.note, t.merchant, t.memberName, (t.categoryPath||[]).join('/')].join(' ').toLowerCase()
+    const text = [t.note, t.merchant, t.region, t.counterparty, t.memberName, (t.categoryPath||[]).join('/'), ...(t.tags||[])].join(' ').toLowerCase()
     return text.includes(kw)
   })
 })
@@ -92,7 +114,7 @@ function openEditor(t) {
   if (t) {
     current.value = JSON.parse(JSON.stringify(t))
   } else {
-    current.value = { id: '', date: '', type: 'expense', categoryPath: [], memberName: '', amount: 0, merchant: '', note: '' }
+    current.value = { id: '', date: '', type: 'expense', categoryPath: [], memberName: '', amount: 0, merchant: '', region: '', counterparty: '', tags: [], note: '' }
   }
   editing.value = true
 }
@@ -108,6 +130,30 @@ function cancel() {
 function save() {
   store.upsert({ ...current.value })
   editing.value = false
+}
+
+function exportCSV() {
+  const header = ['日期','类型','分类','成员','金额','商家','区域','往来对象','标签','备注']
+  const rows = filtered.value.map(t => [
+    t.date,
+    t.type === 'income' ? '收入' : '支出',
+    (t.categoryPath||[]).join('/'),
+    t.memberName || '',
+    t.amount || 0,
+    t.merchant || '',
+    t.region || '',
+    t.counterparty || '',
+    (t.tags||[]).join('|'),
+    t.note || ''
+  ])
+  const csv = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'transactions.csv'
+  a.click()
+  URL.revokeObjectURL(url)
 }
 </script>
 
